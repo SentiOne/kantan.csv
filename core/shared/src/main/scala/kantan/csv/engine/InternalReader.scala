@@ -142,7 +142,7 @@ private[engine] class InternalReader private (
     }
 
   @tailrec
-  final def escapedCellEnd(c: Char): InternalReader.Break = c match {
+  final def escapedCellEnd(c: Char): InternalReader.CellEnd = c match {
     case conf.cellSeparator =>
       endCell()
       InternalReader.Separator
@@ -162,11 +162,11 @@ private[engine] class InternalReader private (
         InternalReader.EOF
       }
 
-    case conf.quote => escapedCell(true)
+    case conf.quote => InternalReader.ContinuePrev
 
     case _ =>
       cell.append(conf.quote)
-      escapedCell(false)
+      InternalReader.Continue
   }
 
   @tailrec
@@ -183,7 +183,11 @@ private[engine] class InternalReader private (
         }
         else escapedCell(true)
       }
-      else if(prev) escapedCellEnd(c)
+      else if(prev) escapedCellEnd(c) match {
+        case InternalReader.ContinuePrev => escapedCell(true)
+        case InternalReader.Continue => escapedCell(false)
+        case breakResult: InternalReader.Break => breakResult
+      }
       else escapedCell(false)
     }
     else {
@@ -247,7 +251,11 @@ private object InternalReader {
   case object CR        extends Break
   case object LF        extends Break
   case object EOF       extends Break
-  sealed trait Break
+  sealed trait Break extends CellEnd
+
+  case object ContinuePrev extends CellEnd
+  case object Continue extends CellEnd
+  sealed trait CellEnd
 
   // Possible outcomes of parsing the beginning of a cell.
   final case class Finished(reason: Break) extends CellStart
